@@ -1,53 +1,78 @@
-# 👁️ CASVMS / EdgeVMS: Industrial AI Video Management System
+# 👁️ CASVMS: Industrial AI Video Management System
 
-Sistema de Gestión de Vídeo (VMS) multiplataforma (Linux, Windows, macOS), de alto rendimiento y arquitectura **Zero-Cloud / Air-Gapped**, diseñado para Mini PCs con procesadores Intel y aceleración gráfica iGPU (Intel Iris Xe / UHD Graphics).
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Architecture](https://img.shields.io/badge/architecture-x86__64-orange.svg)
+![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg)
+![Zero Cloud](https://img.shields.io/badge/Cloud-Zero-red.svg)
+
+**CASVMS** es un Sistema de Gestión de Vídeo (VMS) multiplataforma de alto rendimiento diseñado para la automatización de infraestructuras, *facility management* e industria 4.0. 
+
+Construido bajo una estricta filosofía **zero-cloud**, garantiza la soberanía total de los datos operativos. Procesa múltiples flujos RTSP localmente mediante aceleración de hardware (Intel OpenVINO) y transforma las cámaras de seguridad en sensores IoT inteligentes, conectando la analítica de vídeo directamente con autómatas (PLCs), sistemas SCADA y plataformas domóticas.
 
 ---
 
-## 🏗️ Arquitectura del Sistema
+## ✨ Características Principales
 
-```
-                            +---------------------------------------+
-                            |       Tauri + React + TypeScript      |
-                            |   (UI Estilo Milestone / Synology)    |
-                            +-------------------+-------------------+
-                                                |
-               +--------------------------------+--------------------------------+
-               | MJPEG Stream (Sub-100ms)       | SSE Alertas en Tiempo Real     | REST API (Config / Clips)
-               v                                v                                v
-+---------------------------------------------------------------------------------------------------+
-|                                  FastAPI Orchestrator (Backend)                                   |
-|   +-------------------------------------------------------------------------------------------+   |
-|   |                  IPC Multiprocessing Manager (frame_dict, event_queue)                    |   |
-|   +-------------------------------------------------------------------------------------------+   |
-+---------------------------------------------------------------------------------------------------+
-         |                                        |                                        |
-         v                                        v                                        v
-+------------------+                    +-------------------+                    +------------------+
-| Camera Worker 1  |                    | Camera Worker 2   |                    | Camera Worker N  |
-|  - MOG2 Standby  |                    |  - MOG2 Standby   |                    |  - MOG2 Standby  |
-|  - YOLOv8 (GPU)  |                    |  - YOLOv8 (GPU)   |                    |  - YOLOv8 (GPU)  |
-|  - ByteTrack     |                    |  - ByteTrack      |                    |  - ByteTrack     |
-|  - Vector Engine |                    |  - Vector Engine  |                    |  - Vector Engine |
-|  - Smart RAM DVR |                    |  - Smart RAM DVR  |                    |  - Smart RAM DVR |
-+------------------+                    +-------------------+                    +------------------+
-         |                                        |                                        |
-         +----------------------------------------+----------------------------------------+
-                                                  | Event Queue
-                                                  v
-                     +----------------------------+----------------------------+
-                     |                            |                            |
-                     v                            v                            v
-          +--------------------+       +---------------------+      +---------------------+
-          |    InfluxDB 2.7    |       | Eclipse Mosquitto 2 |      |   Modbus TCP Server |
-          | (Line Protocol TS) |       | (Hierarchical MQTT) |      | (Holding Registers) |
-          +--------------------+       +---------------------+      +---------------------+
-                     |
-                     v
-          +--------------------+
-          |   Grafana Dash     |
-          |  (Flux Analytics)  |
-          +--------------------+
+*   🧠 **Inferencia Edge Optimizada:** Ejecución de YOLOv8/v10 sobre iGPU (Intel QuickSync/OpenVINO), liberando la CPU principal.
+*   🛑 **Gatekeeper de Movimiento (MOG2):** El motor neuronal entra en *standby* dinámico si no hay alteración de píxeles, reduciendo el consumo eléctrico y térmico.
+*   📐 **Motor Analítico Vectorial:** Intrusión perimetral por polígonos, contadores direccionales (Tripwires) y detección de merodeo/aparcamiento.
+*   🚗 **ALPR Integrado:** Reconocimiento de matrículas con OCR optimizado para visión nocturna, discriminación por masa lumínica e integración con base de datos local (SQLite) para control de barreras.
+*   📼 **Smart DVR:** Búfer circular en memoria RAM con compresión JPEG en tiempo real. Exporta clips MP4 de evidencias sin colapsar el servidor.
+*   🏭 **Comunicaciones Industriales I/O:** Pasarela nativa Modbus TCP, publicación MQTT jerárquica y telemetría de aforo en InfluxDB.
+*   💻 **GUI Nativa Multidispositivo:** Frontend (Windows/macOS/Linux) en Tauri/React con streaming MJPEG, visor SSE y editor de reglas vectoriales (Zoom/Pan matricial).
+
+---
+
+## 📐 Arquitectura Lógica
+
+CASVMS utiliza un diseño de **Multiprocesamiento Aislado**. Cada cámara opera en un núcleo de CPU independiente, enviando alertas y telemetría al Orquestador Central mediante colas IPC.
+
+```mermaid
+graph TD
+    subgraph "Capa de Adquisición"
+        CAM1[Cámara IP 1 RTSP]
+        CAM2[Cámara IP 2 RTSP]
+    end
+
+    subgraph "Motor CASVMS (Backend Docker)"
+        subgraph "Worker Aislado"
+            MOG[MOG2 Gatekeeper]
+            YOLO[Inferencia YOLO + ALPR]
+            MATH[Motor Geométrico]
+            DVR[Smart DVR en RAM]
+            MOG --> YOLO
+            YOLO --> MATH
+            MOG --> DVR
+        end
+        
+        IPC((Cola IPC))
+        MEM[(RAM Compartida)]
+
+        subgraph "FastAPI Orquestador"
+            API[API REST & SSE]
+            GW[Gateway Modbus/MQTT/Influx]
+        end
+    end
+
+    CAM1 --> MOG
+    MATH --> IPC
+    MATH -->|JPEG Frame| MEM
+    DVR -.->|Guarda MP4| DISK[(Almacenamiento Local)]
+    
+    IPC --> GW
+    IPC --> API
+    MEM --> API
+
+    subgraph "Presentación y SCADA"
+        UI[Frontend Tauri / React]
+        PLC[PLC / Siemens LOGO! <br> Modbus TCP / MQTT]
+        TSDB[InfluxDB + Grafana]
+    end
+
+    API == "MJPEG & Alertas" ==> UI
+    GW == "Triggers" ==> PLC
+    GW == "Telemetría" ==> TSDB
 ```
 
 ---
@@ -55,9 +80,12 @@ Sistema de Gestión de Vídeo (VMS) multiplataforma (Linux, Windows, macOS), de 
 ## 🚀 Despliegue del Backend e Infraestructura (Docker)
 
 ### 1. Variables de Entorno
-El archivo [.env](file:///Users/castordfedez/Desktop/CASVMS/.env) incluye los parámetros de configuración listos para producción.
+Copia el archivo de plantilla `.env.example` para generar tu entorno local:
+```bash
+cp .env.example .env
+```
 
-### 2. Iniciar el Stack con Aceleración por Hardware
+### 2. Iniciar el Stack con Aceleración por Hardware (Intel iGPU)
 En cualquier Mini PC Linux (Intel Gen 8/9/10/11/12/13/Ultra):
 ```bash
 # Validar disponibilidad del nodo iGPU
@@ -67,14 +95,14 @@ ls -la /dev/dri
 docker compose up -d --build
 ```
 
-Servicios desplegados:
-- **FastAPI / VMS Engine**: `http://localhost:8000` (Docs en `/docs`)
-- **Streaming MJPEG**: `http://localhost:8000/stream/{camera_id}`
-- **SSE Alertas**: `http://localhost:8000/api/alerts/sse`
-- **Modbus TCP Server**: Puerto `5020` (Offset 0 a 5)
-- **InfluxDB 2.7**: `http://localhost:8086`
-- **Grafana**: `http://localhost:3000` (`admin` / `admin`)
-- **Mosquitto MQTT**: Puerto `1883`
+**Servicios desplegados:**
+*   **FastAPI / VMS Engine**: `http://localhost:8000` (Documentación interactiva en `/docs`)
+*   **Streaming MJPEG**: `http://localhost:8000/stream/{camera_id}`
+*   **SSE Alertas**: `http://localhost:8000/api/alerts/sse`
+*   **Modbus TCP Server**: Puerto `5020` (Holding Registers)
+*   **InfluxDB 2.7**: `http://localhost:8086`
+*   **Grafana Dashboards**: `http://localhost:3000` (`admin` / `admin`)
+*   **Mosquitto MQTT**: Puerto `1883`
 
 ---
 
@@ -105,3 +133,15 @@ npm run tauri dev
 | `40004` | `3` | INT16 | **Contador Total OUT** (Salidas acumuladas) |
 | `40005` | `4` | INT16 | **Alarma de Intrusión Perimetral** (`1` si activa) |
 | `40006` | `5` | INT16 | **Límite de Aforo Máximo** (Lectura/Escritura por PLC) |
+
+---
+
+## 🚗 Control de Acceso ALPR y Automatización de Barrera
+
+CASVMS incorpora una arquitectura de IA en cascada (**Dual-Stage AI**) para parking y control perimetral:
+
+1. **Inferencia Macro:** Detección de vehículos con YOLOv8 y ByteTrack.
+2. **Discriminación de Rumbo:** Detección por masa lumínica en HSV (`APPROACHING` vs `DEPARTING`).
+3. **Inferencia Micro:** Localización de placa (`imgsz=320` OpenVINO FP16 en $<4\text{ ms}$).
+4. **Filtro OCR Óptico:** EasyOCR con ecualización adaptativa CLAHE y filtro bilateral.
+5. **Accionamiento Físico:** Disparo de pulso no bloqueante (2 segundos, FC05) sobre PLC de barrera vía Modbus TCP.
