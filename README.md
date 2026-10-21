@@ -17,7 +17,7 @@ Construido bajo una estricta filosofía **zero-cloud**, garantiza la soberanía 
 *   🧠 **Inferencia Edge Optimizada:** Ejecución de YOLOv8/v10 sobre iGPU (Intel QuickSync/OpenVINO), liberando la CPU principal.
 *   🛑 **Gatekeeper de Movimiento (MOG2):** El motor neuronal entra en *standby* dinámico si no hay alteración de píxeles, reduciendo el consumo eléctrico y térmico.
 *   📐 **Motor Analítico Vectorial:** Intrusión perimetral por polígonos, contadores direccionales (Tripwires) y detección de merodeo/aparcamiento.
-*   🚗 **ALPR Integrado:** Reconocimiento de matrículas con OCR optimizado para visión nocturna, discriminación por masa lumínica e integración con base de datos local (SQLite) para control de barreras.
+*   🚗 **ALPR Integrado:** Reconocimiento de matrículas con OCR optimizado para visión nocturna e integración con base de datos local (SQLite) para control de barreras.
 *   📼 **Smart DVR:** Búfer circular en memoria RAM con compresión JPEG en tiempo real. Exporta clips MP4 de evidencias sin colapsar el servidor.
 *   🏭 **Comunicaciones Industriales I/O:** Pasarela nativa Modbus TCP, publicación MQTT jerárquica y telemetría de aforo en InfluxDB.
 *   💻 **GUI Nativa Multidispositivo:** Frontend (Windows/macOS/Linux) en Tauri/React con streaming MJPEG, visor SSE y editor de reglas vectoriales (Zoom/Pan matricial).
