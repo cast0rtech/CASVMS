@@ -1,0 +1,65 @@
+# ==============================================================================
+# CASVMS - Git Ignore Configuration
+# ==============================================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environment variables & credentials
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Databases & local storage
+*.db
+*.sqlite
+*.sqlite3
+storage/
+cache/
+
+# Model weights & training outputs
+runs/
+*.pt
+*.onnx
+*.engine
+*.bin
+*.xml
+yolov8n_openvino_model/
+yolov8n_license_plates_openvino_model/
+
+# Node & Frontend dependencies / build outputs
+node_modules/
+dist/
+build/
+dist-ssr/
+*.tsbuildinfo
+
+# Rust / Tauri build artifacts
+frontend/src-tauri/target/
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
