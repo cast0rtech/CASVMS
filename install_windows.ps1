@@ -76,4 +76,6 @@ Write-Host " 👁️  Motor VMS (API):  http://localhost:8000"
 Write-Host " 📊 Dashboards Grafana: http://localhost:3000 (admin/admin)"
 Write-Host " 🗄️  InfluxDB Console:   http://localhost:8086"
 Write-Host " 📡 Broker MQTT:        mqtt://localhost:1883"
-Write-Host "`nPara arrancar el frontend de escritorio, ve a la carpeta 'frontend', ejecuta 'npm install' y luego 'npm run tauri dev'."
+Write-Host "`nPara arrancar el sistema completo y la aplicación de escritorio, ejecuta:" -ForegroundColor Cyan
+Write-Host "  .\CASVMS-Launcher.bat  (o .\Start-CASVMS.ps1)" -ForegroundColor Yellow
+Write-Host "O abre directamente el binario autoejecutable en: release\windows\CASVMS.exe" -ForegroundColor Green

@@ -10,14 +10,9 @@ import {
   snapOrthogonal
 } from "../utils/affine";
 import {
-  ZoomIn,
-  ZoomOut,
   RotateCcw,
-  Plus,
   Trash2,
   Save,
-  Compass,
-  Square,
   Shield,
   Clock,
   ArrowRight

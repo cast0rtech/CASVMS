@@ -7,8 +7,6 @@ import {
   UploadCloud,
   RotateCcw,
   Users,
-  Activity,
-  ShieldAlert,
   Car
 } from "lucide-react";
 import { SystemTelemetry } from "../types/vms";
@@ -20,7 +18,7 @@ interface HeaderProps {
   onExportConfig: () => void;
   onImportConfig: () => void;
   onResetCounts: () => void;
-  activeAlertCount: number;
+  activeAlertCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -30,7 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   onExportConfig,
   onImportConfig,
   onResetCounts,
-  activeAlertCount
+  activeAlertCount: _activeAlertCount
 }) => {
   const inCount = telemetry?.total_in ?? 0;
   const outCount = telemetry?.total_out ?? 0;

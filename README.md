@@ -106,7 +106,42 @@ docker compose up -d --build
 
 ---
 
-## 💻 Frontend Nativo (Tauri + React + TypeScript)
+## 📦 Aplicaciones Autoejecutables y Binarios (Windows & Debian/Ubuntu)
+
+CASVMS incluye ejecutables nativos precompilados de alto rendimiento tanto para Windows (`.exe`) como para Linux Debian/Ubuntu (`.deb` / binario nativo):
+
+### 🪟 Windows (1-Click Autoejecutable)
+1. **Lanzador Automatizado 1-Click** (levanta el stack Docker y arranca la interfaz):
+   ```cmd
+   CASVMS-Launcher.bat
+   ```
+   *(o en PowerShell:* `.\Start-CASVMS.ps1`*)*
+
+2. **Binario de Escritorio Nativo**:
+   * Ubicación: `release/windows/CASVMS.exe` (23.8 MB, optimizado en release).
+
+---
+
+### 🐧 Linux (Debian / Ubuntu / Raspbian x86_64)
+1. **Instalación Automatizada con Paquete `.deb`**:
+   ```bash
+   chmod +x install_debian.sh start_linux.sh
+   sudo ./install_debian.sh
+   ```
+   *Instala dependencias del sistema, integra el acceso directo `/usr/share/applications/casvms.desktop` y el comando `casvms`.*
+
+2. **Lanzador Automatizado 1-Click**:
+   ```bash
+   ./start_linux.sh
+   ```
+
+3. **Paquete y Binario Directo**:
+   * Paquete Debian: `release/linux/casvms_1.0.0_amd64.deb`
+   * Binario ejecutable ELF: `release/linux/casvms-desktop`
+
+---
+
+## 💻 Entorno de Desarrollo (Frontend Tauri + React + TypeScript)
 
 ### Modo Desarrollo Web:
 ```bash
@@ -115,7 +150,7 @@ npm install
 npm run dev
 ```
 
-### Ejecutar Binario Nativo de Escritorio (Tauri):
+### Modo Desarrollo de Escritorio (Tauri):
 ```bash
 cd frontend
 npm run tauri dev

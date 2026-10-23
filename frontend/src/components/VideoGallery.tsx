@@ -5,9 +5,7 @@ import { exportVideoClipNative } from "../services/tauriStorage";
 import {
   Film,
   Download,
-  Calendar,
   Clock,
-  HardDrive,
   FileVideo,
   Play,
   RefreshCw,

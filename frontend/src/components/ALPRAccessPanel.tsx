@@ -15,7 +15,6 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
-  Sparkles,
   Lock
 } from "lucide-react";
 

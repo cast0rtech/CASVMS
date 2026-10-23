@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Camera } from "../types/vms";
 import { getStreamUrl } from "../services/api";
-import { Maximize2, Minimize2, VideoOff, Activity, ShieldCheck, Flame } from "lucide-react";
+import { Maximize2, Minimize2 } from "lucide-react";
 
 interface LiveGridProps {
   cameras: Camera[];
