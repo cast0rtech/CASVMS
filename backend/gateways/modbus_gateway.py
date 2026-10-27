@@ -5,9 +5,12 @@ import os
 import asyncio
 import logging
 import threading
-from typing import Optional
+from typing import Optional, Dict
 
-from pymodbus.server.async_io import ModbusTcpServer
+try:
+    from pymodbus.server import ModbusTcpServer
+except ImportError:
+    from pymodbus.server.async_io import ModbusTcpServer
 from pymodbus.datastore import (
     ModbusSequentialDataBlock,
     ModbusServerContext,
@@ -128,6 +131,44 @@ class ModbusIndustrialGateway:
             self.store.setValues(3, 4, [flag_val])
         except Exception as e:
             logger.error(f"Error actualizando alarma de intrusión en Modbus: {str(e)}")
+
+    def set_barrier_state(self, is_open: bool) -> None:
+        """Actualiza el estado de la barrera en el Registro 6 (1 = Abierta, 0 = Cerrada)."""
+        try:
+            val = 1 if is_open else 0
+            self.store.setValues(3, 6, [val])
+        except Exception as e:
+            logger.error(f"Error actualizando estado de barrera en Modbus: {str(e)}")
+
+    def set_tripwire_trigger(self, active: bool) -> None:
+        """Actualiza el estado de disparo de línea virtual en el Registro 7."""
+        try:
+            val = 1 if active else 0
+            self.store.setValues(3, 7, [val])
+        except Exception as e:
+            logger.error(f"Error actualizando disparo tripwire en Modbus: {str(e)}")
+
+    def write_holding_register(self, address: int, value: int) -> bool:
+        """Escribe un valor en un Holding Register específico (Función 06 / 16)."""
+        try:
+            self.store.setValues(3, address, [int(value) & 0xFFFF])
+            logger.info(f"[MODBUS] Holding Register {address} actualizado a {value}.")
+            return True
+        except Exception as e:
+            logger.error(f"Error escribiendo registro Modbus {address}: {str(e)}")
+            return False
+
+    def get_all_registers(self, count: int = 10) -> Dict[int, int]:
+        """Lee el estado actual de los primeros registros Holding para diagnóstico y visualización."""
+        try:
+            vals = self.store.getValues(3, 0, count=count)
+            return {i: val for i, val in enumerate(vals)}
+        except Exception as e:
+            logger.error(f"Error leyendo registros Modbus: {str(e)}")
+            return {}
+
+    def is_running(self) -> bool:
+        return self._is_running
 
     def stop(self) -> None:
         """Detiene el servidor Modbus TCP."""

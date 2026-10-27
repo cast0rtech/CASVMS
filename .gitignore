@@ -63,3 +63,6 @@ Desktop.ini
 .idea/
 *.swp
 *.swo
+
+# Log files
+*.log

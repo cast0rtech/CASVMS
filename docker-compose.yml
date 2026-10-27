@@ -11,7 +11,7 @@ services:
     container_name: casvms_engine
     restart: unless-stopped
     ports:
-      - "8000:8000"   # REST API, WebSockets / SSE y Streaming MJPEG
+      - "8001:8000"   # REST API, WebSockets / SSE y Streaming MJPEG
       - "5020:5020"   # Modbus TCP Server
     environment:
       - PYTHONUNBUFFERED=1
@@ -23,15 +23,15 @@ services:
       - MQTT_PORT=${MQTT_PORT:-1883}
       - MODBUS_HOST=${MODBUS_HOST:-0.0.0.0}
       - MODBUS_PORT=${MODBUS_PORT:-5020}
-      - OPENVINO_DEVICE=${OPENVINO_DEVICE:-GPU}
+      - OPENVINO_DEVICE=${OPENVINO_DEVICE:-CPU}
       - OPENVINO_CACHE_DIR=/app/cache/openvino_cache
       - LIBVA_DRIVER_NAME=iHD
-    # Mapeo directo de dispositivos de renderizado para aceleración iGPU Intel QuickSync/OpenCL
-    devices:
-      - /dev/dri:/dev/dri
-    group_add:
-      - video
-      - render
+    # Mapeo para Linux con Intel iGPU nativa (habilitar si /dev/dri está presente en Linux)
+    # devices:
+    #   - /dev/dri:/dev/dri
+    # group_add:
+    #   - video
+    #   - render
     volumes:
       - ./storage:/app/storage
       - ./cache/openvino_cache:/app/cache/openvino_cache
@@ -107,6 +107,20 @@ services:
       - ./config/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
+    networks:
+      - casvms_network
+
+  # ============================================================================
+  # 5. FRONTEND WEB UI (Servidor NGINX para la Shell de Escritorio CASVMS)
+  # ============================================================================
+  frontend_ui:
+    image: nginx:alpine
+    container_name: casvms_frontend
+    restart: unless-stopped
+    ports:
+      - "1420:80"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
     networks:
       - casvms_network
 

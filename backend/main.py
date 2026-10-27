@@ -72,64 +72,65 @@ recent_alerts: List[Dict[str, Any]] = []
 RECORDINGS_DIR = os.getenv("RECORDINGS_DIR", "/app/storage/recordings")
 os.makedirs(RECORDINGS_DIR, exist_ok=True)
 
-# Configuración predeterminada de cámaras si no hay archivo externo
-DEFAULT_CAMERAS = [
-    {
-        "id": "cam_01",
-        "name": "Acceso Principal y Perímetro",
-        "rtsp_url": "demo",
-        "rules": {
-            "tripwires": [
-                {
-                    "rule_id": "tw_entry_01",
-                    "name": "Torniquete Entrada/Salida",
-                    "pt1": (400.0, 200.0),
-                    "pt2": (880.0, 200.0),
-                    "target_classes": ["person"],
-                    "enabled": True
-                }
-            ],
-            "zones": [
-                {
-                    "rule_id": "zn_restricted_01",
-                    "name": "Zona Restringida Sala Eléctrica",
-                    "polygon": [(200.0, 350.0), (600.0, 350.0), (600.0, 650.0), (200.0, 650.0)],
-                    "rule_type": "intrusion",
-                    "target_classes": ["person"],
-                    "enabled": True
-                }
-            ]
-        }
-    },
-    {
-        "id": "cam_parking",
-        "name": "Acceso Parking y Barrera ALPR",
-        "rtsp_url": "demo",
-        "rules": {
-            "tripwires": [
-                {
-                    "rule_id": "tw_barrier_line",
-                    "name": "Línea de Barrera",
-                    "pt1": (300.0, 500.0),
-                    "pt2": (980.0, 500.0),
-                    "target_classes": ["car", "truck", "motorcycle"],
-                    "enabled": True
-                }
-            ],
-            "zones": [
-                {
-                    "rule_id": "zn_barrier_roi",
-                    "name": "Zona de Lectura de Matrículas (Barrera)",
-                    "polygon": [(250.0, 320.0), (1050.0, 320.0), (1050.0, 700.0), (250.0, 700.0)],
-                    "rule_type": "dwell_time",
-                    "max_dwell_seconds": 10.0,
-                    "target_classes": ["car", "truck", "bus", "motorcycle"],
-                    "enabled": True
-                }
-            ]
-        }
-    }
-]
+from core.config_manager import (
+    load_cameras_config,
+    save_cameras_config,
+    load_modbus_config,
+    save_modbus_config
+)
+from core.onvif_discovery import discover_onvif_devices, test_rtsp_connection
+
+def start_camera_worker(cam_cfg: Dict[str, Any], device: str) -> bool:
+    """Inicia de forma aislada el proceso de inferencia y streaming de una cámara."""
+    cam_id = cam_cfg["id"]
+    if not cam_cfg.get("enabled", True):
+        logger.info(f"Cámara '{cam_id}' deshabilitada en configuración. No se inicia proceso.")
+        return False
+
+    stop_camera_worker(cam_id)
+    stop_evt = mp.Event()
+    reset_evt = mp.Event()
+    
+    camera_stop_events[cam_id] = stop_evt
+    camera_reset_events.append(reset_evt)
+
+    proc = mp.Process(
+        target=run_camera_process,
+        args=(
+            cam_id,
+            cam_cfg.get("name", cam_id),
+            cam_cfg.get("rtsp_url", "demo"),
+            cam_cfg.get("rules", {}),
+            shared_frames,
+            event_queue,
+            stop_evt,
+            reset_evt,
+            device
+        ),
+        daemon=True,
+        name=f"Worker-{cam_id}"
+    )
+    proc.start()
+    camera_processes[cam_id] = proc
+    logger.info(f"Cámara '{cam_id}' iniciada con PID={proc.pid}.")
+    return True
+
+def stop_camera_worker(cam_id: str):
+    """Detiene y limpia el proceso worker de una cámara."""
+    if cam_id in camera_stop_events:
+        try:
+            camera_stop_events[cam_id].set()
+        except Exception:
+            pass
+    if cam_id in camera_processes:
+        proc = camera_processes.pop(cam_id, None)
+        if proc and proc.is_alive():
+            proc.join(timeout=1.5)
+            if proc.is_alive():
+                proc.terminate()
+        logger.info(f"Worker de cámara '{cam_id}' detenido.")
+    camera_stop_events.pop(cam_id, None)
+
 
 
 # ==============================================================================
@@ -357,40 +358,28 @@ async def lifespan(app: FastAPI):
     logger.info("=== INICIANDO CASVMS ENGINE ===")
     
     # 1. Inicialización de Gateways I/O
-    influx_gw = InfluxTelemetryGateway()
-    mqtt_gw = MQTTIndustrialGateway()
-    modbus_gw = ModbusIndustrialGateway()
-    modbus_gw.start()
+    if InfluxTelemetryGateway:
+        try:
+            influx_gw = InfluxTelemetryGateway()
+        except Exception as e:
+            logger.error(f"Error initializing InfluxDB gateway: {e}")
+    if MQTTIndustrialGateway:
+        try:
+            mqtt_gw = MQTTIndustrialGateway()
+        except Exception as e:
+            logger.error(f"Error initializing MQTT gateway: {e}")
+    if ModbusIndustrialGateway:
+        try:
+            modbus_gw = ModbusIndustrialGateway()
+            modbus_gw.start()
+        except Exception as e:
+            logger.error(f"Error initializing Modbus gateway: {e}")
 
-    # 2. Iniciar procesos hijos de cámaras
-    device = os.getenv("OPENVINO_DEVICE", "GPU")
-    for cam_cfg in DEFAULT_CAMERAS:
-        cam_id = cam_cfg["id"]
-        stop_evt = mp.Event()
-        reset_evt = mp.Event()
-        
-        camera_stop_events[cam_id] = stop_evt
-        camera_reset_events.append(reset_evt)
-
-        proc = mp.Process(
-            target=run_camera_process,
-            args=(
-                cam_id,
-                cam_cfg["name"],
-                cam_cfg["rtsp_url"],
-                cam_cfg.get("rules", {}),
-                shared_frames,
-                event_queue,
-                stop_evt,
-                reset_evt,
-                device
-            ),
-            daemon=True,
-            name=f"Worker-{cam_id}"
-        )
-        proc.start()
-        camera_processes[cam_id] = proc
-        logger.info(f"Cámara {cam_id} iniciada con PID={proc.pid}.")
+    # 2. Iniciar procesos hijos de cámaras desde configuración persistente
+    device = os.getenv("OPENVINO_DEVICE", "CPU")
+    configured_cameras = load_cameras_config()
+    for cam_cfg in configured_cameras:
+        start_camera_worker(cam_cfg, device)
 
     # 3. Iniciar Cron interno de medianoche
     def on_midnight_reset():
@@ -398,11 +387,15 @@ async def lifespan(app: FastAPI):
             modbus_gw.update_occupancy(0, 0)
         logger.info("[SISTEMA] Reset global de aforo ejecutado a medianoche.")
 
-    midnight_cron = MidnightResetCron(
-        reset_events=camera_reset_events,
-        on_reset_callback=on_midnight_reset
-    )
-    midnight_cron.start()
+    if MidnightResetCron:
+        try:
+            midnight_cron = MidnightResetCron(
+                reset_events=camera_reset_events,
+                on_reset_callback=on_midnight_reset
+            )
+            midnight_cron.start()
+        except Exception as e:
+            logger.error(f"Error initializing MidnightResetCron: {e}")
 
     # 4. Iniciar hilo despachador de eventos IPC
     loop = asyncio.get_running_loop()
@@ -537,11 +530,33 @@ async def sse_alerts_endpoint(request: Request):
 
     return EventSourceResponse(event_generator())
 
+# ==============================================================================
+# ENDPOINTS REST: GESTIÓN E IMPORTACIÓN DE CÁMARAS
+# ==============================================================================
+
+class CameraSaveRequest(BaseModel):
+    id: str
+    name: str
+    rtsp_url: str
+    enabled: Optional[bool] = True
+    onvif_ip: Optional[str] = ""
+    onvif_port: Optional[int] = 80
+    rules: Optional[Dict[str, Any]] = None
+
+class CameraImportRequest(BaseModel):
+    cameras: Optional[List[Dict[str, Any]]] = None
+    csv_text: Optional[str] = None
+    replace_all: Optional[bool] = False
+
+class StreamTestRequest(BaseModel):
+    rtsp_url: str
+
 @app.get("/api/cameras")
 def get_cameras():
     """Retorna la lista de cámaras configuradas y su estado de ejecución."""
     cameras_status = []
-    for cam in DEFAULT_CAMERAS:
+    cams = load_cameras_config()
+    for cam in cams:
         cam_id = cam["id"]
         proc = camera_processes.get(cam_id)
         telemetry = telemetry_cache.get(cam_id, {})
@@ -549,12 +564,216 @@ def get_cameras():
             "id": cam_id,
             "name": cam["name"],
             "rtsp_url": cam["rtsp_url"],
+            "enabled": cam.get("enabled", True),
+            "onvif_ip": cam.get("onvif_ip", ""),
+            "onvif_port": cam.get("onvif_port", 80),
             "is_alive": proc.is_alive() if proc else False,
             "pid": proc.pid if proc else None,
             "telemetry": telemetry,
-            "rules": cam.get("rules", {})
+            "rules": cam.get("rules", {"tripwires": [], "zones": []})
         })
     return cameras_status
+
+@app.post("/api/cameras")
+def save_camera(req: CameraSaveRequest):
+    """Crea o actualiza una cámara individual de forma persistente."""
+    cams = load_cameras_config()
+    device = os.getenv("OPENVINO_DEVICE", "CPU")
+    existing_idx = next((i for i, c in enumerate(cams) if c["id"] == req.id), -1)
+    
+    default_rules = {"tripwires": [], "zones": []}
+    cam_data = {
+        "id": req.id,
+        "name": req.name,
+        "rtsp_url": req.rtsp_url,
+        "enabled": req.enabled if req.enabled is not None else True,
+        "onvif_ip": req.onvif_ip or "",
+        "onvif_port": req.onvif_port or 80,
+        "rules": req.rules if req.rules is not None else (cams[existing_idx].get("rules", default_rules) if existing_idx >= 0 else default_rules)
+    }
+    
+    if existing_idx >= 0:
+        cams[existing_idx] = cam_data
+    else:
+        cams.append(cam_data)
+        
+    save_cameras_config(cams)
+    if cam_data["enabled"]:
+        start_camera_worker(cam_data, device)
+    else:
+        stop_camera_worker(req.id)
+        
+    return {"status": "success", "camera": cam_data, "message": f"Cámara '{req.name}' guardada correctamente."}
+
+@app.delete("/api/cameras/{cam_id}")
+def delete_camera(cam_id: str):
+    """Elimina una cámara y detiene su proceso worker."""
+    cams = load_cameras_config()
+    filtered = [c for c in cams if c["id"] != cam_id]
+    if len(filtered) == len(cams):
+        raise HTTPException(status_code=404, detail="Cámara no encontrada.")
+    save_cameras_config(filtered)
+    stop_camera_worker(cam_id)
+    return {"status": "success", "message": f"Cámara '{cam_id}' eliminada del sistema."}
+
+@app.post("/api/cameras/import")
+def import_cameras_endpoint(req: CameraImportRequest):
+    """Importación masiva de cámaras desde JSON o texto CSV."""
+    device = os.getenv("OPENVINO_DEVICE", "CPU")
+    imported_list = []
+    
+    if req.cameras:
+        imported_list = req.cameras
+    elif req.csv_text:
+        import csv
+        import io
+        try:
+            reader = csv.DictReader(io.StringIO(req.csv_text.strip()))
+            for row in reader:
+                cid = row.get("id") or row.get("camera_id") or f"cam_{int(time.time()*1000)}"
+                imported_list.append({
+                    "id": cid.strip(),
+                    "name": (row.get("name") or cid).strip(),
+                    "rtsp_url": (row.get("rtsp_url") or "demo").strip(),
+                    "enabled": str(row.get("enabled", "true")).lower() in ["true", "1", "yes"],
+                    "onvif_ip": (row.get("onvif_ip") or "").strip(),
+                    "onvif_port": int(row.get("onvif_port") or 80),
+                    "rules": {"tripwires": [], "zones": []}
+                })
+        except Exception as csv_err:
+            raise HTTPException(status_code=400, detail=f"Error parseando CSV: {str(csv_err)}")
+            
+    if not imported_list:
+        raise HTTPException(status_code=400, detail="No se encontraron registros de cámaras válidos.")
+        
+    current = [] if req.replace_all else load_cameras_config()
+    current_ids = {c["id"]: i for i, c in enumerate(current)}
+    
+    for cam in imported_list:
+        cid = cam.get("id")
+        if not cid:
+            continue
+        clean_cam = {
+            "id": str(cid).strip(),
+            "name": str(cam.get("name", cid)).strip(),
+            "rtsp_url": str(cam.get("rtsp_url", "demo")).strip(),
+            "enabled": bool(cam.get("enabled", True)),
+            "onvif_ip": str(cam.get("onvif_ip", "")).strip(),
+            "onvif_port": int(cam.get("onvif_port", 80)),
+            "rules": cam.get("rules", {"tripwires": [], "zones": []})
+        }
+        if cid in current_ids:
+            current[current_ids[cid]] = clean_cam
+        else:
+            current.append(clean_cam)
+            
+    save_cameras_config(current)
+    
+    # Iniciar workers activos
+    for cam in current:
+        if cam.get("enabled", True):
+            start_camera_worker(cam, device)
+        else:
+            stop_camera_worker(cam["id"])
+            
+    return {
+        "status": "success",
+        "imported_count": len(imported_list),
+        "total_cameras": len(current),
+        "message": f"Se han importado {len(imported_list)} cámaras correctamente."
+    }
+
+@app.post("/api/cameras/discover-onvif")
+def discover_onvif_endpoint():
+    """Sondeo WS-Discovery en la red local para auto-detectar cámaras ONVIF."""
+    devices = discover_onvif_devices(timeout=2.5)
+    return {"status": "success", "devices": devices, "total": len(devices)}
+
+@app.post("/api/cameras/test-stream")
+def test_stream_endpoint(req: StreamTestRequest):
+    """Prueba la disponibilidad y resolución de un stream RTSP."""
+    res = test_rtsp_connection(req.rtsp_url)
+    return res
+
+
+# ==============================================================================
+# ENDPOINTS REST: CONFIGURACIÓN Y SALIDAS MODBUS TCP
+# ==============================================================================
+
+class ModbusTestOutputRequest(BaseModel):
+    coil_address: Optional[int] = 0
+    pulse_duration: Optional[float] = 2.0
+    action: Optional[str] = "pulse"  # "pulse" o "write_register"
+    register_address: Optional[int] = None
+    register_value: Optional[int] = None
+    plc_host: Optional[str] = None
+    plc_port: Optional[int] = None
+    slave_id: Optional[int] = 1
+
+@app.get("/api/modbus/config")
+def get_modbus_config_endpoint():
+    """Retorna la configuración completa de Modbus Server, PLC y mapeo de salidas."""
+    cfg = load_modbus_config()
+    return {"status": "success", "config": cfg}
+
+@app.post("/api/modbus/config")
+def update_modbus_config_endpoint(cfg: Dict[str, Any]):
+    """Actualiza y persiste la configuración de Modbus."""
+    save_modbus_config(cfg)
+    if modbus_gw and "server" in cfg:
+        cap = cfg["server"].get("capacity_limit", 50)
+        modbus_gw.capacity_limit = cap
+        modbus_gw.write_holding_register(5, cap)
+    return {"status": "success", "message": "Configuración Modbus guardada correctamente.", "config": cfg}
+
+@app.get("/api/modbus/status")
+def get_modbus_status_endpoint():
+    """Retorna el estado de los registros Holding y el servidor Modbus."""
+    cfg = load_modbus_config()
+    reg_values = modbus_gw.get_all_registers(count=12) if modbus_gw else {}
+    server_running = modbus_gw.is_running() if modbus_gw else False
+    return {
+        "status": "success",
+        "server_running": server_running,
+        "host": cfg.get("server", {}).get("host", "0.0.0.0"),
+        "port": cfg.get("server", {}).get("port", 5020),
+        "slave_id": cfg.get("server", {}).get("slave_id", 1),
+        "plc_host": cfg.get("plc_client", {}).get("host", "192.168.1.50"),
+        "plc_port": cfg.get("plc_client", {}).get("port", 502),
+        "registers": reg_values,
+        "output_mappings": cfg.get("output_mappings", {})
+    }
+
+@app.post("/api/modbus/test-output")
+def test_modbus_output_endpoint(req: ModbusTestOutputRequest):
+    """Dispara un pulso de prueba a una bobina/relé de PLC o escribe en un registro Modbus."""
+    if req.action == "write_register":
+        if req.register_address is None or req.register_value is None:
+            raise HTTPException(status_code=400, detail="Debe especificar register_address y register_value.")
+        if modbus_gw:
+            ok = modbus_gw.write_holding_register(req.register_address, req.register_value)
+            return {"status": "success" if ok else "error", "message": f"Registro {req.register_address} escrito con valor {req.register_value}."}
+        else:
+            raise HTTPException(status_code=500, detail="Servidor Modbus no está activo.")
+
+    # Disparo de pulso de relé a PLC externo
+    try:
+        from gateways.barrier_gateway import ModbusBarrierGateway
+        gw = ModbusBarrierGateway(
+            host=req.plc_host,
+            port=req.plc_port,
+            slave_id=req.slave_id,
+            pulse_duration_seconds=req.pulse_duration or 2.0
+        )
+        res = gw.test_pulse_sync(
+            coil_address=req.coil_address or 0,
+            pulse_duration=req.pulse_duration or 2.0,
+            slave_id=req.slave_id
+        )
+        return res
+    except Exception as e:
+        return {"success": False, "error": f"Excepción ejecutando prueba Modbus: {str(e)}"}
+
 
 @app.get("/api/telemetry")
 def get_telemetry():

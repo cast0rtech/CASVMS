@@ -7,13 +7,14 @@ import {
   UploadCloud,
   RotateCcw,
   Users,
-  Car
+  Car,
+  Sliders
 } from "lucide-react";
 import { SystemTelemetry } from "../types/vms";
 
 interface HeaderProps {
-  currentTab: "live" | "rules" | "gallery" | "alpr";
-  onTabChange: (tab: "live" | "rules" | "gallery" | "alpr") => void;
+  currentTab: "live" | "rules" | "gallery" | "alpr" | "config";
+  onTabChange: (tab: "live" | "rules" | "gallery" | "alpr" | "config") => void;
   telemetry: SystemTelemetry | null;
   onExportConfig: () => void;
   onImportConfig: () => void;
@@ -102,6 +103,18 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <Car size={14} />
           <span>Accesos ALPR</span>
+        </button>
+
+        <button
+          onClick={() => onTabChange("config")}
+          className={`flex items-center space-x-2 px-3 py-1.5 rounded text-xs font-medium transition-all ${
+            currentTab === "config"
+              ? "bg-vms-border text-vms-accent shadow-sm"
+              : "text-vms-muted hover:text-white hover:bg-vms-hover/50"
+          }`}
+        >
+          <Sliders size={14} />
+          <span>Configuración</span>
         </button>
       </nav>
 

@@ -42,6 +42,9 @@ export interface Camera {
   id: string;
   name: string;
   rtsp_url: string;
+  enabled?: boolean;
+  onvif_ip?: string;
+  onvif_port?: number;
   is_alive: boolean;
   pid?: number;
   rules: CameraRules;
@@ -54,6 +57,58 @@ export interface Camera {
     motion_detected: boolean;
     is_standby: boolean;
   };
+}
+
+export interface ONVIFDevice {
+  ip: string;
+  port: number;
+  xaddrs?: string;
+  name?: string;
+  model?: string;
+  manufacturer?: string;
+}
+
+export interface ModbusServerConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  slave_id: number;
+  capacity_limit: number;
+}
+
+export interface ModbusPLCClientConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  slave_unit: number;
+  timeout: number;
+}
+
+export interface ModbusOutputMapping {
+  name: string;
+  enabled: boolean;
+  coil_address: number;
+  pulse_duration: number;
+  description: string;
+}
+
+export interface ModbusConfig {
+  server: ModbusServerConfig;
+  plc_client: ModbusPLCClientConfig;
+  output_mappings: Record<string, ModbusOutputMapping>;
+  register_mappings: Record<string, number>;
+}
+
+export interface ModbusStatus {
+  status: string;
+  server_running: boolean;
+  host: string;
+  port: number;
+  slave_id: number;
+  plc_host: string;
+  plc_port: number;
+  registers: Record<string, number>;
+  output_mappings: Record<string, ModbusOutputMapping>;
 }
 
 export interface AlertEvent {

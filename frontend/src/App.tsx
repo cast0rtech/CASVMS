@@ -21,6 +21,7 @@ import { RuleEditorCanvas } from "./components/RuleEditorCanvas";
 import { AlertPanel } from "./components/AlertPanel";
 import { VideoGallery } from "./components/VideoGallery";
 import { ALPRAccessPanel } from "./components/ALPRAccessPanel";
+import { ConfigurationPanel } from "./components/ConfigurationPanel";
 
 export const App: React.FC = () => {
   const [cameras, setCameras] = useState<Camera[]>([]);
@@ -28,7 +29,7 @@ export const App: React.FC = () => {
   const [editingCamera, setEditingCamera] = useState<Camera | null>(null);
   const [alerts, setAlerts] = useState<AlertEvent[]>([]);
   const [telemetry, setTelemetry] = useState<SystemTelemetry | null>(null);
-  const [currentTab, setCurrentTab] = useState<"live" | "rules" | "gallery" | "alpr">("live");
+  const [currentTab, setCurrentTab] = useState<"live" | "rules" | "gallery" | "alpr" | "config">("live");
   const [isAlertPanelOpen, setIsAlertPanelOpen] = useState<boolean>(true);
 
 
@@ -191,6 +192,16 @@ export const App: React.FC = () => {
 
         {/* Panel de Gestión de Accesos ALPR (Whitelist SQLite) */}
         {currentTab === "alpr" && <ALPRAccessPanel />}
+
+        {/* Panel de Configuración General: Cámaras e Importación + Salidas Modbus TCP */}
+        {currentTab === "config" && (
+          <ConfigurationPanel
+            onCamerasUpdated={(cams) => {
+              setCameras(cams);
+              saveConfigToAppConfig(cams);
+            }}
+          />
+        )}
 
         {/* Panel de Alertas en Tiempo Real (Server-Sent Events) */}
 

@@ -3,7 +3,7 @@
 # Multi-arch / Intel iGPU Acceleration Dockerfile
 # ==============================================================================
 
-FROM python:3.10-slim
+FROM python:3.10-slim-bookworm
 
 # Metadatos
 LABEL maintainer="CASVMS Engineering"

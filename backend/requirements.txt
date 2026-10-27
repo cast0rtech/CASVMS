@@ -23,7 +23,7 @@ pydantic-settings>=2.2.1
 # Industrial Protocols & Messaging
 paho-mqtt>=2.0.0
 influxdb-client[async]>=1.41.0
-pymodbus>=3.6.8
+pymodbus==3.6.8
 onvif-zeep>=0.2.12
 
 

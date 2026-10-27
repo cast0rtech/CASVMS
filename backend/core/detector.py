@@ -33,7 +33,27 @@ class EdgeYOLODetector:
         tracker_config: str = "bytetrack.yaml",
         target_classes: Optional[Set[str]] = None
     ):
-        self.device = device.upper()
+        # Detección inteligente de hardware disponible (CUDA / OpenVINO GPU / CPU)
+        import torch
+        dev_req = (device or "CPU").strip()
+        if dev_req.upper() in ["GPU", "CUDA"]:
+            if torch.cuda.is_available():
+                self.device = "0"
+            else:
+                try:
+                    import openvino as ov
+                    if "GPU" in ov.Core().available_devices:
+                        self.device = "GPU"
+                    else:
+                        logger.info("Aceleración GPU no disponible en hardware actual. Usando CPU optimizado.")
+                        self.device = "cpu"
+                except Exception:
+                    self.device = "cpu"
+        elif dev_req.upper() == "CPU":
+            self.device = "cpu"
+        else:
+            self.device = dev_req.lower()
+
         self.conf_threshold = conf_threshold
         self.iou_threshold = iou_threshold
         self.tracker_config = tracker_config
@@ -62,9 +82,9 @@ class EdgeYOLODetector:
                 logger.info(f"Cargando modelo base '{model_path}'...")
                 base_model = YOLO(model_path)
                 
-                # Si el dispositivo es GPU u OpenVINO está disponible, exportamos a formato OpenVINO
+                # Si OpenVINO está disponible, exportamos a formato OpenVINO
                 try:
-                    logger.info("Exportando modelo a OpenVINO FP16 para aceleración iGPU...")
+                    logger.info("Exportando modelo a OpenVINO FP16 para inferencia acelerada...")
                     exported_path = base_model.export(format="openvino", half=True)
                     model = YOLO(exported_path, task="detect")
                 except Exception as export_err:
@@ -80,7 +100,7 @@ class EdgeYOLODetector:
             logger.error(f"Error crítico inicializando modelo YOLOv8: {str(e)}", exc_info=True)
             # Reintento con CPU seguro
             logger.info("Intentando fallback sobre CPU estándar...")
-            self.device = "CPU"
+            self.device = "cpu"
             return YOLO(model_path)
 
     def track(self, frame: np.ndarray) -> List[TrackedDetection]:
@@ -97,26 +117,38 @@ class EdgeYOLODetector:
             return []
 
         try:
-            # Ejecución de YOLO con persistencia de tracker
-            # device='GPU' usa OpenVINO con Intel iGPU / OpenCL
-            results = self.model.track(
-                source=frame,
-                persist=True,
-                tracker=self.tracker_config,
-                conf=self.conf_threshold,
-                iou=self.iou_threshold,
-                device=self.device,
-                verbose=False
-            )
+            try:
+                results = self.model.track(
+                    source=frame,
+                    persist=True,
+                    tracker=self.tracker_config,
+                    conf=self.conf_threshold,
+                    iou=self.iou_threshold,
+                    device=self.device,
+                    verbose=False
+                )
+            except Exception as e:
+                if self.device != "cpu":
+                    logger.warning(f"Inferencia falló en dispositivo '{self.device}': {e}. Reintentando con 'cpu'...")
+                    self.device = "cpu"
+                    results = self.model.track(
+                        source=frame,
+                        persist=True,
+                        tracker=self.tracker_config,
+                        conf=self.conf_threshold,
+                        iou=self.iou_threshold,
+                        device="cpu",
+                        verbose=False
+                    )
+                else:
+                    raise e
             
             detections: List[TrackedDetection] = []
-            
             if not results or len(results) == 0:
                 return detections
 
             result = results[0]
             boxes = result.boxes
-            
             if boxes is None or len(boxes) == 0:
                 return detections
             

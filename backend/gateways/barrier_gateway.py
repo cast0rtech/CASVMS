@@ -35,14 +35,34 @@ class ModbusBarrierGateway:
         pulse_duration_seconds: float = 2.0,
         connection_timeout: float = 3.0
     ):
-        target_host = host or plc_host or os.getenv("PLC_MODBUS_HOST", "192.168.1.50")
-        target_port = port if host is not None else (plc_port or int(os.getenv("PLC_MODBUS_PORT", "502")))
+        target_host = host or plc_host
+        target_port = port if host is not None else plc_port
+        s_unit = slave_id or slave_unit
+        p_dur = pulse_duration_seconds
+
+        # Intentar cargar desde modbus_config.json si no se proporcionan argumentos
+        if not target_host:
+            try:
+                from core.config_manager import load_modbus_config
+                cfg = load_modbus_config()
+                plc_cfg = cfg.get("plc_client", {})
+                target_host = plc_cfg.get("host") or os.getenv("PLC_MODBUS_HOST", "192.168.1.50")
+                target_port = plc_cfg.get("port") or int(os.getenv("PLC_MODBUS_PORT", "502"))
+                s_unit = plc_cfg.get("slave_unit") or s_unit
+                p_dur = cfg.get("output_mappings", {}).get("barrier_relay", {}).get("pulse_duration", 2.0)
+            except Exception:
+                target_host = os.getenv("PLC_MODBUS_HOST", "192.168.1.50")
+                target_port = int(os.getenv("PLC_MODBUS_PORT", "502"))
+
+        if not target_port:
+            target_port = int(os.getenv("PLC_MODBUS_PORT", "502"))
+
         self.plc_host = target_host
         self.plc_port = target_port
         self.host = target_host
         self.port = target_port
-        self.slave_unit = slave_id or slave_unit or int(os.getenv("PLC_MODBUS_SLAVE", "1"))
-        self.pulse_duration = pulse_duration_seconds
+        self.slave_unit = s_unit
+        self.pulse_duration = p_dur
         self.timeout = connection_timeout
         self._lock = threading.Lock()
         
@@ -56,6 +76,41 @@ class ModbusBarrierGateway:
             f"ModbusBarrierGateway configurado para PLC en {self.plc_host}:{self.plc_port} "
             f"(Unit ID: {self.slave_unit}, Pulso: {self.pulse_duration}s)."
         )
+
+    def test_pulse_sync(self, coil_address: int = 0, pulse_duration: float = 1.0, slave_id: Optional[int] = None) -> dict:
+        """Prueba síncrona inmediata de conexión y pulso para el panel de configuración."""
+        s_id = slave_id or self.slave_unit
+        t0 = time.time()
+        try:
+            from pymodbus.client import ModbusTcpClient
+            client = ModbusTcpClient(self.plc_host, port=self.plc_port, timeout=self.timeout)
+            if not client.connect():
+                return {
+                    "success": False,
+                    "error": f"No se pudo conectar al PLC en {self.plc_host}:{self.plc_port} (Tiempo de espera agotado).",
+                    "latency_ms": round((time.time() - t0) * 1000, 1)
+                }
+            
+            # Escribir bobina a True
+            client.write_coil(coil_address, True, slave=s_id)
+            time.sleep(pulse_duration)
+            client.write_coil(coil_address, False, slave=s_id)
+            client.close()
+            latency = round((time.time() - t0) * 1000, 1)
+            return {
+                "success": True,
+                "coil": coil_address,
+                "slave_id": s_id,
+                "pulse_duration": pulse_duration,
+                "latency_ms": latency,
+                "message": f"Pulso de prueba enviado exitosamente a {self.plc_host}:{self.plc_port} (Coil {coil_address})."
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Fallo comunicando con PLC ({self.plc_host}:{self.plc_port}): {str(e)}",
+                "latency_ms": round((time.time() - t0) * 1000, 1)
+            }
 
     def trigger_barrier(self, coil_address: int = 0, slave_id: int = 1) -> None:
         """

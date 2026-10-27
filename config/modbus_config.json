@@ -1,0 +1,56 @@
+{
+  "server": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 5020,
+    "slave_id": 1,
+    "capacity_limit": 50
+  },
+  "plc_client": {
+    "enabled": true,
+    "host": "192.168.1.50",
+    "port": 502,
+    "slave_unit": 1,
+    "timeout": 3.0
+  },
+  "output_mappings": {
+    "barrier_relay": {
+      "name": "Apertura de Barrera ALPR",
+      "enabled": true,
+      "coil_address": 0,
+      "pulse_duration": 2.0,
+      "description": "Pulso de relé (contacto seco) para accionador de barrera al validar matrícula"
+    },
+    "intrusion_alarm": {
+      "name": "Alarma de Intrusión Perimetral",
+      "enabled": true,
+      "coil_address": 1,
+      "pulse_duration": 3.0,
+      "description": "Pulso a sirena o PLC cuando se detecta persona en zona restringida"
+    },
+    "overcapacity_alarm": {
+      "name": "Alarma de Sobre-aforo",
+      "enabled": true,
+      "coil_address": 2,
+      "pulse_duration": 5.0,
+      "description": "Señal a PLC cuando el aforo actual supera el límite configurado"
+    },
+    "tripwire_trigger": {
+      "name": "Disparo por Cruce de Línea",
+      "enabled": false,
+      "coil_address": 3,
+      "pulse_duration": 1.5,
+      "description": "Pulso de relé al cruzar torniquete o línea virtual"
+    }
+  },
+  "register_mappings": {
+    "occupancy_reg": 0,
+    "overcapacity_flag_reg": 1,
+    "in_count_reg": 2,
+    "out_count_reg": 3,
+    "intrusion_flag_reg": 4,
+    "capacity_limit_reg": 5,
+    "barrier_status_reg": 6,
+    "alarm_status_reg": 7
+  }
+}

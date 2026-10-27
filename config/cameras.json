@@ -1,0 +1,118 @@
+[
+  {
+    "id": "cam_01",
+    "name": "Acceso Principal y Perímetro",
+    "rtsp_url": "demo",
+    "enabled": true,
+    "rules": {
+      "tripwires": [
+        {
+          "rule_id": "tw_entry_01",
+          "name": "Torniquete Entrada/Salida",
+          "pt1": [
+            400.0,
+            200.0
+          ],
+          "pt2": [
+            880.0,
+            200.0
+          ],
+          "target_classes": [
+            "person"
+          ],
+          "enabled": true
+        }
+      ],
+      "zones": [
+        {
+          "rule_id": "zn_restricted_01",
+          "name": "Zona Restringida Sala Eléctrica",
+          "polygon": [
+            [
+              200.0,
+              350.0
+            ],
+            [
+              600.0,
+              350.0
+            ],
+            [
+              600.0,
+              650.0
+            ],
+            [
+              200.0,
+              650.0
+            ]
+          ],
+          "rule_type": "intrusion",
+          "target_classes": [
+            "person"
+          ],
+          "enabled": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "cam_parking",
+    "name": "Acceso Parking y Barrera ALPR",
+    "rtsp_url": "demo",
+    "enabled": true,
+    "rules": {
+      "tripwires": [
+        {
+          "rule_id": "tw_barrier_line",
+          "name": "Línea de Barrera",
+          "pt1": [
+            300.0,
+            500.0
+          ],
+          "pt2": [
+            980.0,
+            500.0
+          ],
+          "target_classes": [
+            "car",
+            "truck",
+            "motorcycle"
+          ],
+          "enabled": true
+        }
+      ],
+      "zones": [
+        {
+          "rule_id": "zn_barrier_roi",
+          "name": "Zona de Lectura de Matrículas (Barrera)",
+          "polygon": [
+            [
+              250.0,
+              320.0
+            ],
+            [
+              1050.0,
+              320.0
+            ],
+            [
+              1050.0,
+              700.0
+            ],
+            [
+              250.0,
+              700.0
+            ]
+          ],
+          "rule_type": "dwell_time",
+          "max_dwell_seconds": 10.0,
+          "target_classes": [
+            "car",
+            "truck",
+            "bus",
+            "motorcycle"
+          ],
+          "enabled": true
+        }
+      ]
+    }
+  }
+]
